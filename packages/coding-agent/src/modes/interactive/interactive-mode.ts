@@ -1806,6 +1806,15 @@ export class InteractiveMode {
 					}
 				})();
 			},
+			startAsyncCompaction: async () => {
+				this.session.startAsyncCompaction();
+			},
+			cancelAsyncCompaction: () => {
+				this.session.cancelAsyncCompaction();
+			},
+			isAsyncCompacting: () => {
+				return this.session.isAsyncCompacting();
+			},
 			getSystemPrompt: () => this.session.systemPrompt,
 		});
 
@@ -3055,12 +3064,20 @@ export class InteractiveMode {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(true);
 				}
-				// Keep editor active; submissions are queued during compaction.
-				this.autoCompactionEscapeHandler = this.defaultEditor.onEscape;
-				this.defaultEditor.onEscape = () => {
-					this.session.abortCompaction();
-				};
-				this.showStatusIndicator(new CompactionStatusIndicator(this.ui, event.reason));
+
+				// For async compaction, don't block the editor
+				if (event.reason === "async_threshold") {
+					// Show background status in footer
+					this.footerDataProvider.setExtensionStatus("async-compaction", "Compacting...");
+					this.footer.invalidate();
+				} else {
+					// Sync compaction: block editor, set escape handler
+					this.autoCompactionEscapeHandler = this.defaultEditor.onEscape;
+					this.defaultEditor.onEscape = () => {
+						this.session.abortCompaction();
+					};
+					this.showStatusIndicator(new CompactionStatusIndicator(this.ui, event.reason));
+				}
 				this.ui.requestRender();
 				break;
 			}
@@ -3069,6 +3086,31 @@ export class InteractiveMode {
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(false);
 				}
+
+				// Handle async compaction differently
+				if (event.reason === "async_threshold") {
+					// Clear footer status
+					this.footerDataProvider.setExtensionStatus("async-compaction", "");
+					this.footer.invalidate();
+
+					if (event.aborted) {
+						this.showStatus("Async compaction cancelled");
+					} else if (event.result) {
+						// Show notification instead of blocking chat rebuild
+						this.showStatus(
+							`Compaction complete: ${event.result.tokensBefore} to ${event.result.estimatedTokensAfter} tokens`,
+						);
+						// Rebuild chat to show new context
+						this.chatContainer.clear();
+						this.rebuildChatFromMessages();
+					} else if (event.errorMessage) {
+						this.showError(event.errorMessage);
+					}
+					this.ui.requestRender();
+					break;
+				}
+
+				// Sync compaction handling (existing logic)
 				if (this.autoCompactionEscapeHandler) {
 					this.defaultEditor.onEscape = this.autoCompactionEscapeHandler;
 					this.autoCompactionEscapeHandler = undefined;

@@ -281,6 +281,9 @@ export class ExtensionRunner {
 	private hasPendingMessagesFn: () => boolean = () => false;
 	private getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	private compactFn: (options?: CompactOptions) => void = () => {};
+	private startAsyncCompactionFn: () => Promise<void> = async () => {};
+	private cancelAsyncCompactionFn: () => void = () => {};
+	private isAsyncCompactingFn: () => boolean = () => false;
 	private getSystemPromptFn: () => string = () => "";
 	private getSystemPromptOptionsFn: () => BuildSystemPromptOptions = () => ({ cwd: this.cwd });
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
@@ -343,6 +346,9 @@ export class ExtensionRunner {
 		this.shutdownHandler = contextActions.shutdown;
 		this.getContextUsageFn = contextActions.getContextUsage;
 		this.compactFn = contextActions.compact;
+		this.startAsyncCompactionFn = contextActions.startAsyncCompaction;
+		this.cancelAsyncCompactionFn = contextActions.cancelAsyncCompaction;
+		this.isAsyncCompactingFn = contextActions.isAsyncCompacting;
 		this.getSystemPromptFn = contextActions.getSystemPrompt;
 		this.getSystemPromptOptionsFn = contextActions.getSystemPromptOptions ?? (() => ({ cwd: this.cwd }));
 
@@ -729,6 +735,18 @@ export class ExtensionRunner {
 			compact: (options) => {
 				runner.assertActive();
 				runner.compactFn(options);
+			},
+			startAsyncCompaction: async () => {
+				runner.assertActive();
+				await runner.startAsyncCompactionFn();
+			},
+			cancelAsyncCompaction: () => {
+				runner.assertActive();
+				runner.cancelAsyncCompactionFn();
+			},
+			isAsyncCompacting: () => {
+				runner.assertActive();
+				return runner.isAsyncCompactingFn();
 			},
 			getSystemPrompt: () => {
 				runner.assertActive();

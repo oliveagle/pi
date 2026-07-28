@@ -378,6 +378,63 @@ pi.on("session_before_tree", async (event, ctx) => {
 
 See `SessionBeforeTreeEvent` and `TreePreparation` in the types file.
 
+## Async Compaction
+
+By default, compaction blocks user interaction while the LLM generates the summary. For long sessions, this can take several seconds.
+
+**Async compaction** runs in the background without blocking the user. When enabled:
+
+1. User continues chatting normally while compaction runs in background
+2. New user messages are queued during compaction
+3. When compaction completes, the session context is atomically swapped and queued messages are processed
+4. Footer shows "⏳ Compacting..." during background work
+
+### Enabling Async Compaction
+
+Add to your `settings.json`:
+
+```json
+{
+  "compaction": {
+    "async": true,
+    "asyncThreshold": 32768
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `async` | `false` | Enable async background compaction |
+| `asyncThreshold` | `32768` | Token distance from context window to trigger async compaction |
+
+**When does async compaction trigger?**
+
+Async compaction triggers when:
+- `async: true` is set
+- Context tokens exceed `contextWindow - reserveTokens` (normal threshold)
+- Distance to overflow is greater than `asyncThreshold` (enough room to run in background)
+
+If the context is very close to overflow (distance < `asyncThreshold`), sync compaction is used instead to avoid overflow risk.
+
+### Extension API
+
+Extensions can programmatically control async compaction:
+
+```typescript
+// Start async compaction manually
+await ctx.startAsyncCompaction();
+
+// Cancel ongoing async compaction
+ctx.cancelAsyncCompaction();
+
+// Check if async compaction is running
+const isRunning = ctx.isAsyncCompacting();
+```
+
+### Events
+
+Async compaction emits the same `compaction_start` and `compaction_end` events, with `reason: "async_threshold"`. Extensions can listen for these events to add custom UI feedback.
+
 ## Settings
 
 Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settings.json`:
@@ -387,7 +444,9 @@ Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settin
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "keepRecentTokens": 20000,
+    "async": false,
+    "asyncThreshold": 32768
   }
 }
 ```
@@ -397,5 +456,7 @@ Configure compaction in `~/.pi/agent/settings.json` or `<project-dir>/.pi/settin
 | `enabled` | `true` | Enable auto-compaction |
 | `reserveTokens` | `16384` | Tokens to reserve for LLM response |
 | `keepRecentTokens` | `20000` | Recent tokens to keep (not summarized) |
+| `async` | `false` | Enable async background compaction (non-blocking) |
+| `asyncThreshold` | `32768` | Token distance from context window to trigger async compaction |
 
 Disable auto-compaction with `"enabled": false`. You can still compact manually with `/compact`.

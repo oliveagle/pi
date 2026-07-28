@@ -149,13 +149,13 @@ export type AgentSessionEvent =
 			steering: readonly string[];
 			followUp: readonly string[];
 	  }
-	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" | "async_threshold" }
 	| { type: "entry_appended"; entry: SessionEntry }
 	| { type: "session_info_changed"; name: string | undefined }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
 	| {
 			type: "compaction_end";
-			reason: "manual" | "threshold" | "overflow";
+			reason: "manual" | "threshold" | "overflow" | "async_threshold";
 			result: CompactionResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;
@@ -174,7 +174,7 @@ export type AgentSessionEvent =
 	| {
 			type: "summarization_retry_attempt_start";
 			source: "compaction";
-			reason: "manual" | "threshold" | "overflow";
+			reason: "manual" | "threshold" | "overflow" | "async_threshold";
 	  }
 	| { type: "summarization_retry_finished" }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
@@ -325,6 +325,13 @@ export class AgentSession {
 	private _compactionAbortController: AbortController | undefined = undefined;
 	private _autoCompactionAbortController: AbortController | undefined = undefined;
 	private _overflowRecoveryAttempted = false;
+
+	// Async compaction state
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: held so the promise is not GC'd and for future awaiting
+	private _asyncCompactionPromise: Promise<void> | null = null;
+	private _asyncCompactionAbortController: AbortController | null = null;
+	private _asyncCompactionQueue: Array<{ text: string; images?: ImageContent[] }> = [];
+	private _isAsyncCompacting = false;
 
 	// Branch summarization state
 	private _branchSummaryAbortController: AbortController | undefined = undefined;
@@ -1117,6 +1124,13 @@ export class AgentSession {
 		let messages: AgentMessage[] | undefined;
 
 		try {
+			// If async compaction is in progress, queue the message
+			if (this._isAsyncCompacting) {
+				this._asyncCompactionQueue.push({ text, images: options?.images });
+				preflightResult?.(true);
+				return;
+			}
+
 			// Handle extension commands first (execute immediately, even during streaming)
 			// Extension commands manage their own LLM interaction via pi.sendMessage()
 			if (expandPromptTemplates && text.startsWith("/")) {
@@ -2036,6 +2050,13 @@ export class AgentSession {
 			contextTokens = directContextTokens;
 		}
 		if (shouldCompact(contextTokens, contextWindow, settings)) {
+			// Check if async compaction should be used instead of sync
+			const distanceToOverflow = contextWindow - contextTokens;
+			if (settings.async && distanceToOverflow > settings.asyncThreshold && !this._isAsyncCompacting) {
+				// Start async compaction in background, don't block
+				this._startAsyncCompaction(contextTokens, contextWindow);
+				return false;
+			}
 			return await this._runAutoCompaction("threshold", false);
 		}
 		return false;
@@ -2223,6 +2244,239 @@ export class AgentSession {
 	 */
 	setAutoCompactionEnabled(enabled: boolean): void {
 		this.settingsManager.setCompactionEnabled(enabled);
+	}
+
+	/**
+	 * Start async compaction in background.
+	 * Non-blocking: user can continue interacting while compaction runs.
+	 */
+	private _startAsyncCompaction(_contextTokens: number, _contextWindow: number): void {
+		if (this._isAsyncCompacting) return;
+
+		const settings = this.settingsManager.getCompactionSettings();
+		const pathEntries = this.sessionManager.getBranch();
+		const preparation = prepareCompaction(pathEntries, settings);
+		if (!preparation) return;
+
+		this._isAsyncCompacting = true;
+		this._asyncCompactionAbortController = new AbortController();
+		this._emit({ type: "compaction_start", reason: "async_threshold" });
+
+		this._asyncCompactionPromise = this._runAsyncCompactionBackground(preparation);
+	}
+
+	/**
+	 * Manually start async compaction (from extension API or /compact --async).
+	 */
+	private _startAsyncCompactionManual(): void {
+		if (this._isAsyncCompacting) return;
+
+		const settings = this.settingsManager.getCompactionSettings();
+		const pathEntries = this.sessionManager.getBranch();
+		const preparation = prepareCompaction(pathEntries, settings);
+		if (!preparation) return;
+
+		this._isAsyncCompacting = true;
+		this._asyncCompactionAbortController = new AbortController();
+		this._emit({ type: "compaction_start", reason: "manual" });
+
+		this._asyncCompactionPromise = this._runAsyncCompactionBackground(preparation);
+	}
+
+	/**
+	 * Run compaction in background without blocking user interaction.
+	 */
+	private async _runAsyncCompactionBackground(
+		preparation: import("./compaction/index.ts").CompactionPreparation,
+	): Promise<void> {
+		const _settings = this.settingsManager.getCompactionSettings();
+
+		try {
+			if (!this.model) {
+				this._isAsyncCompacting = false;
+				return;
+			}
+
+			let apiKey: string | undefined;
+			let headers: Record<string, string> | undefined;
+			let env: Record<string, string> | undefined;
+			if (this.agent.streamFunction === streamSimple) {
+				const authResult = await this._modelRuntime.getAuth(this.model);
+				if (!authResult?.auth.apiKey) {
+					this._isAsyncCompacting = false;
+					return;
+				}
+				apiKey = authResult.auth.apiKey;
+				headers = withoutDeletedHeaders(authResult.auth.headers);
+				env = authResult.env;
+			} else {
+				({ apiKey, headers, env } = await this._getSummarizationRequestAuth(this.model));
+			}
+
+			// Check extension hook
+			let extensionCompaction: CompactionResult | undefined;
+			let fromExtension = false;
+
+			if (this._extensionRunner.hasHandlers("session_before_compact")) {
+				const extensionResult = (await this._extensionRunner.emit({
+					type: "session_before_compact",
+					preparation,
+					branchEntries: this.sessionManager.getBranch(),
+					customInstructions: undefined,
+					reason: "async_threshold",
+					willRetry: false,
+					signal: this._asyncCompactionAbortController!.signal,
+				})) as SessionBeforeCompactResult | undefined;
+
+				if (extensionResult?.cancel) {
+					this._emit({
+						type: "compaction_end",
+						reason: "async_threshold",
+						result: undefined,
+						aborted: true,
+						willRetry: false,
+					});
+					this._isAsyncCompacting = false;
+					return;
+				}
+
+				if (extensionResult?.compaction) {
+					extensionCompaction = extensionResult.compaction;
+					fromExtension = true;
+				}
+			}
+
+			let summary: string;
+			let firstKeptEntryId: string;
+			let tokensBefore: number;
+			let usage: Usage | undefined;
+			let details: unknown;
+
+			if (extensionCompaction) {
+				summary = extensionCompaction.summary;
+				firstKeptEntryId = extensionCompaction.firstKeptEntryId;
+				tokensBefore = extensionCompaction.tokensBefore;
+				usage = extensionCompaction.usage;
+				details = extensionCompaction.details;
+			} else {
+				const compactResult = await compact(
+					preparation,
+					this.model,
+					apiKey,
+					headers,
+					undefined,
+					this._asyncCompactionAbortController!.signal,
+					this.thinkingLevel,
+					this.agent.streamFunction,
+					env,
+					this.settingsManager.getRetrySettings(),
+					this._summarizationRetryCallbacks({ source: "compaction", reason: "async_threshold" as any }),
+				);
+				summary = compactResult.summary;
+				firstKeptEntryId = compactResult.firstKeptEntryId;
+				tokensBefore = compactResult.tokensBefore;
+				usage = compactResult.usage;
+				details = compactResult.details;
+			}
+
+			if (this._asyncCompactionAbortController?.signal.aborted) {
+				this._emit({
+					type: "compaction_end",
+					reason: "async_threshold",
+					result: undefined,
+					aborted: true,
+					willRetry: false,
+				});
+				return;
+			}
+
+			// Atomic swap: append compaction entry and rebuild context
+			this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
+			const sessionContext = this.sessionManager.buildSessionContext();
+			this.agent.state.messages = sessionContext.messages;
+			const estimatedTokensAfter = estimateMessagesTokens(sessionContext.messages);
+
+			const savedCompactionEntry = this.sessionManager
+				.getEntries()
+				.find((e) => e.type === "compaction" && e.summary === summary) as CompactionEntry | undefined;
+
+			if (this._extensionRunner && savedCompactionEntry) {
+				await this._extensionRunner.emit({
+					type: "session_compact",
+					compactionEntry: savedCompactionEntry,
+					fromExtension,
+					reason: "async_threshold" as any,
+					willRetry: false,
+				});
+			}
+
+			const result: CompactionResult = {
+				summary,
+				firstKeptEntryId,
+				tokensBefore,
+				estimatedTokensAfter,
+				usage,
+				details,
+			};
+			this._emit({ type: "compaction_end", reason: "async_threshold", result, aborted: false, willRetry: false });
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : "async compaction failed";
+			this._emit({
+				type: "compaction_end",
+				reason: "async_threshold",
+				result: undefined,
+				aborted: false,
+				willRetry: false,
+				errorMessage: `Async compaction failed: ${errorMessage}`,
+			});
+		} finally {
+			this._isAsyncCompacting = false;
+			this._asyncCompactionAbortController = null;
+			this._asyncCompactionPromise = null;
+			// Process queued messages
+			this._processAsyncCompactionQueue();
+		}
+	}
+
+	/**
+	 * Process messages queued during async compaction.
+	 */
+	private _processAsyncCompactionQueue(): void {
+		const queue = this._asyncCompactionQueue;
+		this._asyncCompactionQueue = [];
+
+		// Process queued messages sequentially
+		for (const msg of queue) {
+			// Use setTimeout to avoid blocking the current event loop
+			setTimeout(() => {
+				this.prompt(msg.text, { images: msg.images }).catch((error) => {
+					console.error("Failed to process queued message:", error);
+				});
+			}, 0);
+		}
+	}
+
+	/**
+	 * Manually start async compaction (from extension API or /compact --async).
+	 */
+	startAsyncCompaction(): void {
+		this._startAsyncCompactionManual();
+	}
+
+	/**
+	 * Cancel ongoing async compaction.
+	 */
+	cancelAsyncCompaction(): void {
+		if (this._asyncCompactionAbortController) {
+			this._asyncCompactionAbortController.abort();
+		}
+	}
+
+	/**
+	 * Check if async compaction is in progress.
+	 */
+	isAsyncCompacting(): boolean {
+		return this._isAsyncCompacting;
 	}
 
 	/** Whether auto-compaction is enabled */
@@ -2434,6 +2688,15 @@ export class AgentSession {
 							options?.onError?.(err);
 						}
 					})();
+				},
+				startAsyncCompaction: async () => {
+					this._startAsyncCompactionManual();
+				},
+				cancelAsyncCompaction: () => {
+					this.cancelAsyncCompaction();
+				},
+				isAsyncCompacting: () => {
+					return this.isAsyncCompacting();
 				},
 				getSystemPrompt: () => this.systemPrompt,
 				getSystemPromptOptions: () => this._baseSystemPromptOptions,
