@@ -18,6 +18,8 @@
 import {
 	type Counter,
 	type Histogram,
+	INVALID_SPANID,
+	INVALID_TRACEID,
 	type Meter,
 	metrics,
 	context as otelContext,
@@ -376,6 +378,19 @@ export function recordCompletionError(model: Model<Api>, errorType: "setup" | "s
 // ---------------------------------------------------------------------------
 // Stream span management
 // ---------------------------------------------------------------------------
+
+/**
+ * Span context of the currently active span, or undefined when no host tracer
+ * is registered / no span is active. Callers pass the result straight into
+ * `lazyStream(model, setup, parentContext)` so the stream span becomes a child
+ * of the caller's span. Exported so consumers (e.g. pi-coding-agent) do not
+ * need a direct `@opentelemetry/api` dependency.
+ */
+export function activeSpanContext(): SpanContext | undefined {
+	const ctx = trace.getActiveSpan()?.spanContext();
+	if (!ctx || ctx.traceId === INVALID_TRACEID || ctx.spanId === INVALID_SPANID) return undefined;
+	return ctx;
+}
 
 /**
  * Create a span representing a single LLM stream lifecycle. When

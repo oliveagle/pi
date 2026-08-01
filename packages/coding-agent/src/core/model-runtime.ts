@@ -8,6 +8,7 @@ import {
 	type AuthInteraction,
 	type AuthResult,
 	type AuthType,
+	activeSpanContext,
 	type Context,
 	type Credential,
 	type CredentialInfo,
@@ -470,17 +471,22 @@ export class ModelRuntime implements Models {
 		context: Context,
 		options?: ModelsApiStreamOptions<TApi>,
 	): AssistantMessageEventStream {
-		return lazyStream(model, async () => {
-			const prepared = await this.prepareRequest(
-				model,
-				options as (StreamOptions & ModelsStreamTransforms) | undefined,
-			);
-			return prepared.provider.stream(
-				prepared.model as Model<TApi>,
-				context,
-				prepared.options as ApiStreamOptions<TApi>,
-			);
-		});
+		return lazyStream(
+			model,
+			async () => {
+				const prepared = await this.prepareRequest(
+					model,
+					options as (StreamOptions & ModelsStreamTransforms) | undefined,
+				);
+				return prepared.provider.stream(
+					prepared.model as Model<TApi>,
+					context,
+					prepared.options as ApiStreamOptions<TApi>,
+				);
+			},
+			// Undefined when no host tracer is registered, keeping the span a root span.
+			activeSpanContext(),
+		);
 	}
 
 	complete<TApi extends Api>(
@@ -492,10 +498,14 @@ export class ModelRuntime implements Models {
 	}
 
 	streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
-		return lazyStream(model, async () => {
-			const prepared = await this.prepareRequest(model, options);
-			return prepared.provider.streamSimple(prepared.model, context, prepared.options as SimpleStreamOptions);
-		});
+		return lazyStream(
+			model,
+			async () => {
+				const prepared = await this.prepareRequest(model, options);
+				return prepared.provider.streamSimple(prepared.model, context, prepared.options as SimpleStreamOptions);
+			},
+			activeSpanContext(),
+		);
 	}
 
 	completeSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): Promise<AssistantMessage> {

@@ -5,6 +5,7 @@ import {
 	type AuthContext,
 	type AuthInteraction,
 	type AuthResult,
+	activeSpanContext,
 	type Context,
 	type Credential,
 	lazyStream,
@@ -449,21 +450,26 @@ export function composeModelProvider(
 		options: StreamOptions | undefined,
 		simple: boolean,
 	): AssistantMessageEventStream =>
-		lazyStream(model, async () => {
-			if (extension?.streamSimple && model.api === extension.api) {
-				return extension.streamSimple(model, context, options as SimpleStreamOptions);
-			}
-			if (base && supportsBaseApi(model)) {
+		lazyStream(
+			model,
+			async () => {
+				if (extension?.streamSimple && model.api === extension.api) {
+					return extension.streamSimple(model, context, options as SimpleStreamOptions);
+				}
+				if (base && supportsBaseApi(model)) {
+					return simple
+						? base.streamSimple(model, context, options as SimpleStreamOptions)
+						: base.stream(model, context, options);
+				}
+				const api = getApiProvider(model.api);
+				if (!api) throw new Error(`No API provider registered for api: ${model.api}`);
 				return simple
-					? base.streamSimple(model, context, options as SimpleStreamOptions)
-					: base.stream(model, context, options);
-			}
-			const api = getApiProvider(model.api);
-			if (!api) throw new Error(`No API provider registered for api: ${model.api}`);
-			return simple
-				? api.streamSimple(model, context, options as SimpleStreamOptions)
-				: api.stream(model, context, options);
-		});
+					? api.streamSimple(model, context, options as SimpleStreamOptions)
+					: api.stream(model, context, options);
+			},
+			// Undefined when no host tracer is registered, keeping the span a root span.
+			activeSpanContext(),
+		);
 
 	return {
 		id: providerId,
