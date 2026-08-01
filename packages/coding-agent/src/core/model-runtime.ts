@@ -29,6 +29,7 @@ import {
 	type ProviderHeaders,
 	type SimpleStreamOptions,
 	type StreamOptions,
+	streamSpanOptions,
 } from "@earendil-works/pi-ai";
 import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
 import { getAgentDir } from "../config.ts";
@@ -486,6 +487,7 @@ export class ModelRuntime implements Models {
 			},
 			// Undefined when no host tracer is registered, keeping the span a root span.
 			activeSpanContext(),
+			streamSpanOptions(options),
 		);
 	}
 
@@ -505,6 +507,7 @@ export class ModelRuntime implements Models {
 				return prepared.provider.streamSimple(prepared.model, context, prepared.options as SimpleStreamOptions);
 			},
 			activeSpanContext(),
+			streamSpanOptions(options),
 		);
 	}
 

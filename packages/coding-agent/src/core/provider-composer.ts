@@ -19,6 +19,7 @@ import {
 	type RefreshModelsContext,
 	type SimpleStreamOptions,
 	type StreamOptions,
+	streamSpanOptions,
 } from "@earendil-works/pi-ai";
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
@@ -469,6 +470,7 @@ export function composeModelProvider(
 			},
 			// Undefined when no host tracer is registered, keeping the span a root span.
 			activeSpanContext(),
+			streamSpanOptions(options),
 		);
 
 	return {

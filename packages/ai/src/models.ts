@@ -28,6 +28,7 @@ import type {
 	StreamOptions,
 	Usage,
 } from "./types.ts";
+import { streamSpanOptions } from "./utils/otel.ts";
 
 export { ModelsError, type ModelsErrorCode } from "./auth/resolve.ts";
 
@@ -491,14 +492,19 @@ class ModelsImpl implements MutableModels {
 		context: Context,
 		options?: ModelsApiStreamOptions<TApi>,
 	): AssistantMessageEventStream {
-		return lazyStream(model, async () => {
-			const provider = this.requireProvider(model);
-			const { requestModel, requestOptions } = await this.applyAuth(
-				model,
-				options as ModelsApiStreamOptions<Api> | undefined,
-			);
-			return provider.stream(requestModel as Model<TApi>, context, requestOptions as ApiStreamOptions<TApi>);
-		});
+		return lazyStream(
+			model,
+			async () => {
+				const provider = this.requireProvider(model);
+				const { requestModel, requestOptions } = await this.applyAuth(
+					model,
+					options as ModelsApiStreamOptions<Api> | undefined,
+				);
+				return provider.stream(requestModel as Model<TApi>, context, requestOptions as ApiStreamOptions<TApi>);
+			},
+			undefined,
+			streamSpanOptions(options),
+		);
 	}
 
 	async complete<TApi extends Api>(
@@ -510,11 +516,16 @@ class ModelsImpl implements MutableModels {
 	}
 
 	streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
-		return lazyStream(model, async () => {
-			const provider = this.requireProvider(model);
-			const { requestModel, requestOptions } = await this.applyAuth(model, options);
-			return provider.streamSimple(requestModel, context, requestOptions as SimpleStreamOptions);
-		});
+		return lazyStream(
+			model,
+			async () => {
+				const provider = this.requireProvider(model);
+				const { requestModel, requestOptions } = await this.applyAuth(model, options);
+				return provider.streamSimple(requestModel, context, requestOptions as SimpleStreamOptions);
+			},
+			undefined,
+			streamSpanOptions(options),
+		);
 	}
 
 	async completeSimple(

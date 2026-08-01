@@ -393,13 +393,32 @@ export function activeSpanContext(): SpanContext | undefined {
 }
 
 /**
+ * Optional per-stream span attributes that are not derivable from the model:
+ * the requested thinking level and the caller's session id.
+ */
+export interface StreamSpanOptions {
+	thinking?: string;
+	sessionId?: string;
+}
+
+/**
+ * Project the telemetry-relevant fields of stream options onto
+ * `StreamSpanOptions`. Returns undefined when neither field is present so
+ * callers can pass the result straight through to `lazyStream`.
+ */
+export function streamSpanOptions(options?: { reasoning?: string; sessionId?: string }): StreamSpanOptions | undefined {
+	if (!options?.reasoning && !options?.sessionId) return undefined;
+	return { thinking: options.reasoning, sessionId: options.sessionId };
+}
+
+/**
  * Create a span representing a single LLM stream lifecycle. When
  * `parentContext` is supplied the span becomes a child of that context;
  * otherwise it uses the active context (which may be root when no host
  * tracer is registered). Returns a no-op Span when telemetry is disabled so
  * callers can unconditionally call `.end()` / `.setAttribute()`.
  */
-export function startStreamSpan(model: Model<Api>, parentContext?: SpanContext): Span {
+export function startStreamSpan(model: Model<Api>, parentContext?: SpanContext, otelOptions?: StreamSpanOptions): Span {
 	if (!isTelemetryEnabled()) {
 		// Return a no-op span so callers don't need null checks.
 		return trace.getTracer("pi-ai").startSpan("pi.stream");
@@ -412,6 +431,10 @@ export function startStreamSpan(model: Model<Api>, parentContext?: SpanContext):
 		"pi.max_tokens": model.maxTokens,
 		"pi.streaming": true,
 	};
+	// Omitted rather than set to "" / "unknown" when the caller has no value, so
+	// backends can distinguish "not reported" from "reported empty".
+	if (otelOptions?.thinking) attributes["pi.thinking"] = otelOptions.thinking;
+	if (otelOptions?.sessionId) attributes["pi.session_id"] = otelOptions.sessionId;
 	if (parentContext) {
 		const parentCtx = trace.setSpanContext(otelContext.active(), parentContext);
 		return tracer.startSpan("pi.stream", { attributes }, parentCtx);

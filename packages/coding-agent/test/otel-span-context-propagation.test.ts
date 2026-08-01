@@ -1,7 +1,7 @@
 // Verifies the coding-agent stream entry points hand the active span context to
 // pi-ai's lazyStream, so LLM stream spans become children of the caller's span.
 
-import type { Provider } from "@earendil-works/pi-ai";
+import type { Provider, StreamSpanOptions } from "@earendil-works/pi-ai";
 import {
 	type Context,
 	type ContextManager,
@@ -103,6 +103,10 @@ function capturedParentContexts(): (SpanContext | undefined)[] {
 	return lazyStreamMock.mock.calls.map((call) => call[2] as SpanContext | undefined);
 }
 
+function capturedSpanOptions(): (StreamSpanOptions | undefined)[] {
+	return lazyStreamMock.mock.calls.map((call) => call[3] as StreamSpanOptions | undefined);
+}
+
 beforeEach(() => {
 	lazyStreamMock.mockClear();
 });
@@ -151,5 +155,45 @@ describe("span context propagation into lazyStream", () => {
 		withActiveSpan(() => provider.streamSimple(model, { messages: [] }, {}));
 
 		expect(capturedParentContexts()).toEqual([parentSpanContext, parentSpanContext]);
+	});
+});
+
+describe("span attribute options propagation into lazyStream", () => {
+	it("passes undefined when the caller supplies neither reasoning nor sessionId", async () => {
+		const runtime = await createRuntime();
+		const model = runtime.getModels()[0];
+
+		runtime.streamSimple(model, { messages: [] });
+		(await composedProvider()).streamSimple(model, { messages: [] }, {});
+
+		expect(capturedSpanOptions()).toEqual([undefined, undefined]);
+	});
+
+	it("maps reasoning and sessionId from ModelRuntime.streamSimple", async () => {
+		const runtime = await createRuntime();
+		const model = runtime.getModels()[0];
+
+		runtime.streamSimple(model, { messages: [] }, { reasoning: "high", sessionId: "session-1" });
+
+		expect(capturedSpanOptions()).toEqual([{ thinking: "high", sessionId: "session-1" }]);
+	});
+
+	it("maps sessionId from ModelRuntime.stream", async () => {
+		const runtime = await createRuntime();
+		const model = runtime.getModels()[0];
+
+		runtime.stream(model, { messages: [] }, { sessionId: "session-2" });
+
+		expect(capturedSpanOptions()).toEqual([{ thinking: undefined, sessionId: "session-2" }]);
+	});
+
+	it("maps reasoning and sessionId from the composed provider stream", async () => {
+		const runtime = await createRuntime();
+		const model = runtime.getModels()[0];
+		const provider = await composedProvider();
+
+		provider.streamSimple(model, { messages: [] }, { reasoning: "low", sessionId: "session-3" });
+
+		expect(capturedSpanOptions()).toEqual([{ thinking: "low", sessionId: "session-3" }]);
 	});
 });

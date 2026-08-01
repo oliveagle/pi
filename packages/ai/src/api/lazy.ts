@@ -6,7 +6,9 @@ import {
 	logCompletionError,
 	recordCompletionError,
 	recordCompletionMetrics,
+	type StreamSpanOptions,
 	startStreamSpan,
+	streamSpanOptions,
 } from "../utils/otel.ts";
 
 function createSetupErrorMessage(model: Model<Api>, error: unknown): AssistantMessage {
@@ -67,16 +69,18 @@ async function forwardStream(
  *
  * When `parentContext` is supplied the stream span becomes a child of that
  * span context, enabling trace correlation from the caller (e.g. the agent
- * runtime passing its active span).
+ * runtime passing its active span). `otelOptions` carries span attributes that
+ * are not derivable from the model (thinking level, session id).
  */
 export function lazyStream(
 	model: Model<Api>,
 	setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
 	parentContext?: SpanContext,
+	otelOptions?: StreamSpanOptions,
 ): AssistantMessageEventStream {
 	const outer = new AssistantMessageEventStream();
 	const startedAt = performance.now();
-	const span = startStreamSpan(model, parentContext);
+	const span = startStreamSpan(model, parentContext, otelOptions);
 	let streaming = false;
 
 	setup()
@@ -110,8 +114,18 @@ export function lazyStream(
 export function lazyApi(load: () => Promise<ProviderStreams>): ProviderStreams {
 	return {
 		stream: (model, context, options) =>
-			lazyStream(model, async () => (await load()).stream(model, context, options)),
+			lazyStream(
+				model,
+				async () => (await load()).stream(model, context, options),
+				undefined,
+				streamSpanOptions(options),
+			),
 		streamSimple: (model, context, options) =>
-			lazyStream(model, async () => (await load()).streamSimple(model, context, options)),
+			lazyStream(
+				model,
+				async () => (await load()).streamSimple(model, context, options),
+				undefined,
+				streamSpanOptions(options),
+			),
 	};
 }
