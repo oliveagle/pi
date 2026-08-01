@@ -15,7 +15,16 @@
  *   at config-set time, not at every record call.
  */
 
-import { type Counter, type Histogram, type Meter, metrics, trace } from "@opentelemetry/api";
+import {
+	type Counter,
+	type Histogram,
+	type Meter,
+	metrics,
+	context as otelContext,
+	type Span,
+	type SpanContext,
+	trace,
+} from "@opentelemetry/api";
 import type { ExportResult } from "@opentelemetry/core";
 import type { LogRecordExporter, ReadableLogRecord } from "@opentelemetry/sdk-logs";
 import type { Api, AssistantMessage, Model } from "../types.ts";
@@ -362,6 +371,34 @@ export function recordCompletionError(model: Model<Api>, errorType: "setup" | "s
 	const attributes = { "pi.provider": model.provider, "pi.model": model.id };
 	instruments.requests.add(1, { ...attributes, "pi.status": "error" });
 	instruments.errors.add(1, { ...attributes, "pi.error_type": errorType });
+}
+
+// ---------------------------------------------------------------------------
+// Stream span management
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a span representing a single LLM stream lifecycle. When
+ * `parentContext` is supplied the span becomes a child of that context;
+ * otherwise it uses the active context (which may be root when no host
+ * tracer is registered). Returns a no-op Span when telemetry is disabled so
+ * callers can unconditionally call `.end()` / `.setAttribute()`.
+ */
+export function startStreamSpan(model: Model<Api>, parentContext?: SpanContext): Span {
+	if (!isTelemetryEnabled()) {
+		// Return a no-op span so callers don't need null checks.
+		return trace.getTracer("pi-ai").startSpan("pi.stream");
+	}
+	const tracer = trace.getTracer("pi-ai");
+	const attributes: Record<string, string> = {
+		"pi.provider": model.provider,
+		"pi.model": model.id,
+	};
+	if (parentContext) {
+		const parentCtx = trace.setSpanContext(otelContext.active(), parentContext);
+		return tracer.startSpan("pi.stream", { attributes }, parentCtx);
+	}
+	return tracer.startSpan("pi.stream", { attributes });
 }
 
 // ---------------------------------------------------------------------------
