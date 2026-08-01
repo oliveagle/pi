@@ -73,6 +73,18 @@ describe("startStreamSpan", () => {
 		expect(span).toBeDefined();
 		span.end();
 	});
+
+	it("sets model attributes on the span via setAttribute (no throw)", async () => {
+		const model = makeModel();
+		const span = startStreamSpan(model);
+		// setAttribute should not throw for the model-derived attributes.
+		expect(() => {
+			span.setAttribute("pi.context_window", model.contextWindow);
+			span.setAttribute("pi.max_tokens", model.maxTokens);
+			span.setAttribute("pi.streaming", true);
+		}).not.toThrow();
+		span.end();
+	});
 });
 
 describe("lazyStream parentContext", () => {

@@ -47,7 +47,7 @@ async function forwardStream(
 		target.push(event);
 	}
 	const finalMessage = hasResult(source) ? await source.result() : undefined;
-	const durationMs = Date.now() - startedAt;
+	const durationMs = performance.now() - startedAt;
 	if (finalMessage) {
 		span.setAttribute("pi.status", finalMessage.stopReason);
 		recordCompletionMetrics(model, finalMessage, durationMs);
@@ -75,7 +75,7 @@ export function lazyStream(
 	parentContext?: SpanContext,
 ): AssistantMessageEventStream {
 	const outer = new AssistantMessageEventStream();
-	const startedAt = Date.now();
+	const startedAt = performance.now();
 	const span = startStreamSpan(model, parentContext);
 	let streaming = false;
 

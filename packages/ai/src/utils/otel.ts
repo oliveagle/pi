@@ -390,9 +390,12 @@ export function startStreamSpan(model: Model<Api>, parentContext?: SpanContext):
 		return trace.getTracer("pi-ai").startSpan("pi.stream");
 	}
 	const tracer = trace.getTracer("pi-ai");
-	const attributes: Record<string, string> = {
+	const attributes: Record<string, string | number | boolean> = {
 		"pi.provider": model.provider,
 		"pi.model": model.id,
+		"pi.context_window": model.contextWindow,
+		"pi.max_tokens": model.maxTokens,
+		"pi.streaming": true,
 	};
 	if (parentContext) {
 		const parentCtx = trace.setSpanContext(otelContext.active(), parentContext);
