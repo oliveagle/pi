@@ -1,5 +1,6 @@
 import type { Api, AssistantMessage, AssistantMessageEvent, Model, ProviderStreams } from "../types.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
+import { logCompletion, logCompletionError, recordCompletionError, recordCompletionMetrics } from "../utils/otel.ts";
 
 function createSetupErrorMessage(model: Model<Api>, error: unknown): AssistantMessage {
 	return {
@@ -31,11 +32,22 @@ function hasResult(
 async function forwardStream(
 	target: AssistantMessageEventStream,
 	source: AsyncIterable<AssistantMessageEvent>,
+	model: Model<Api>,
+	startedAt: number,
 ): Promise<void> {
 	for await (const event of source) {
 		target.push(event);
 	}
-	target.end(hasResult(source) ? await source.result() : undefined);
+	const finalMessage = hasResult(source) ? await source.result() : undefined;
+	const durationMs = Date.now() - startedAt;
+	if (finalMessage) {
+		recordCompletionMetrics(model, finalMessage, durationMs);
+		// Fire-and-forget: structured log emit is async (lazy OTEL SDK load);
+		// the caller already has the AssistantMessage in hand. Failures are
+		// swallowed inside logCompletion().
+		void logCompletion(model, finalMessage, durationMs);
+	}
+	target.end(finalMessage);
 }
 
 /**
@@ -48,10 +60,21 @@ export function lazyStream(
 	setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
 ): AssistantMessageEventStream {
 	const outer = new AssistantMessageEventStream();
+	const startedAt = Date.now();
+	let streaming = false;
 
 	setup()
-		.then((inner) => forwardStream(outer, inner))
+		.then((inner) => {
+			streaming = true;
+			return forwardStream(outer, inner, model, startedAt);
+		})
 		.catch((error) => {
+			// Setup failures (auth, lazy module load) and stream-phase failures
+			// (source stream throwing) both land here; the flag distinguishes them
+			// for the error_type metric attribute.
+			const errorType = streaming ? "stream" : "setup";
+			recordCompletionError(model, errorType);
+			void logCompletionError(model, errorType, error);
 			const message = createSetupErrorMessage(model, error);
 			outer.push({ type: "error", reason: "error", error: message });
 			outer.end(message);
