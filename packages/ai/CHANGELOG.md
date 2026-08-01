@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added OpenTelemetry completion metrics (`pi.completion.requests`, `pi.completion.duration`, `pi.completion.tokens`, `pi.completion.errors`) and structured completion logs, configured through `setTelemetryConfig()` with `PI_OTEL_ENABLED` / `OTEL_EXPORTER_OTLP_ENDPOINT` env overrides.
+- Added a `pi.stream` span per LLM stream carrying `pi.provider`, `pi.model`, `pi.context_window`, `pi.max_tokens`, `pi.streaming`, and the optional `pi.thinking` / `pi.session_id` attributes.
+- Added `activeSpanContext()` and `streamSpanOptions()` so hosts can parent stream spans and report thinking level / session id without depending on `@opentelemetry/api` directly.
+
 ### Fixed
 
 - Updated GPT-5.6 Terra and Luna pricing across OpenAI and passthrough model catalogs.
