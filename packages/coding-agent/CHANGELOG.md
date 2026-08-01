@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed session persistence to recreate the session directory on demand if it is removed externally between writes, instead of failing with ENOENT.
+
 ## [0.82.0] - 2026-07-24
 
 ### New Features
