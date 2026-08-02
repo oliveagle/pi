@@ -49,15 +49,33 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.getText(), "");
 		});
 
-		it("shows most recent history entry on Up arrow when editor is empty", () => {
+		it("shows most recent history entry on Up arrow when cursor is at start", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
 			editor.addToHistory("first prompt");
 			editor.addToHistory("second prompt");
 
+			// Start with some text and cursor at column 0 (not empty editor, to avoid
+			// trackpad-scroll false positives).
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = jump to col 0
+
 			editor.handleInput("\x1b[A"); // Up arrow
 
 			assert.strictEqual(editor.getText(), "second prompt");
+		});
+
+		it("Up arrow on empty editor does not trigger history (trackpad protection)", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+
+			editor.addToHistory("first prompt");
+			editor.addToHistory("second prompt");
+
+			// Empty editor + Up = no history (trackpad scroll protection)
+			editor.handleInput("\x1b[A"); // Up arrow
+
+			// Editor should remain empty
+			assert.strictEqual(editor.getText(), "");
 		});
 
 		it("cycles through history entries on repeated Up arrow", () => {
@@ -66,6 +84,10 @@ describe("Editor component", () => {
 			editor.addToHistory("first");
 			editor.addToHistory("second");
 			editor.addToHistory("third");
+
+			// Start with some text and cursor at column 0 (to enter history browsing).
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = jump to col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows "third"
 			assert.strictEqual(editor.getText(), "third");
@@ -129,6 +151,8 @@ describe("Editor component", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
 			editor.addToHistory("old prompt");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows "old prompt"
 			editor.handleInput("x"); // Type a character - exits history mode
@@ -141,13 +165,15 @@ describe("Editor component", () => {
 
 			editor.addToHistory("first");
 			editor.addToHistory("second");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows "second"
 			editor.setText(""); // External clear
 
-			// Up should start fresh from most recent
+			// Up on empty editor does not enter history (trackpad protection)
 			editor.handleInput("\x1b[A");
-			assert.strictEqual(editor.getText(), "second");
+			assert.strictEqual(editor.getText(), "");
 		});
 
 		it("does not add empty strings to history", () => {
@@ -156,6 +182,8 @@ describe("Editor component", () => {
 			editor.addToHistory("");
 			editor.addToHistory("   ");
 			editor.addToHistory("valid");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A");
 			assert.strictEqual(editor.getText(), "valid");
@@ -171,6 +199,8 @@ describe("Editor component", () => {
 			editor.addToHistory("same");
 			editor.addToHistory("same");
 			editor.addToHistory("same");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // "same"
 			assert.strictEqual(editor.getText(), "same");
@@ -185,6 +215,8 @@ describe("Editor component", () => {
 			editor.addToHistory("first");
 			editor.addToHistory("second");
 			editor.addToHistory("first"); // Not consecutive, should be added
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // "first"
 			assert.strictEqual(editor.getText(), "first");
@@ -219,6 +251,8 @@ describe("Editor component", () => {
 			for (let i = 0; i < 105; i++) {
 				editor.addToHistory(`prompt ${i}`);
 			}
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			// Navigate to oldest
 			for (let i = 0; i < 100; i++) {
@@ -238,6 +272,8 @@ describe("Editor component", () => {
 
 			editor.addToHistory("older entry");
 			editor.addToHistory("line1\nline2\nline3");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows multi-line entry at start
 			assert.strictEqual(editor.getText(), "line1\nline2\nline3");
@@ -254,6 +290,8 @@ describe("Editor component", () => {
 			editor.addToHistory("older entry");
 			editor.addToHistory("line1\nline2\nline3");
 			editor.addToHistory("newer entry");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // newer entry
 			editor.handleInput("\x1b[A"); // multi-line entry
@@ -271,6 +309,8 @@ describe("Editor component", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
 			editor.addToHistory("line1\nline2\nline3");
+			editor.setText("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows entry at start
 			assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
@@ -1967,15 +2007,23 @@ describe("Editor component", () => {
 			editor.handleInput("d");
 			assert.strictEqual(editor.getText(), "world");
 
-			// Ctrl+W - delete word
+			// Ctrl+W - delete word, leave empty
 			editor.handleInput("\x17"); // Ctrl+W
 			assert.strictEqual(editor.getText(), "");
+
+			// Set some text to enter history browsing (empty editor + Up does nothing).
+			editor.handleInput("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			// Press Up - enter history browsing, shows "hello"
 			editor.handleInput("\x1b[A"); // Up arrow
 			assert.strictEqual(editor.getText(), "hello");
 
-			// Undo should restore to "" (state before entering history browsing)
+			// Undo should restore to "x" (state before entering history browsing)
+			editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+			assert.strictEqual(editor.getText(), "x");
+
+			// Undo again should restore to "" (state before typing "x")
 			editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
 			assert.strictEqual(editor.getText(), "");
 
@@ -2002,9 +2050,9 @@ describe("Editor component", () => {
 			editor.handleInput("t");
 			assert.strictEqual(editor.getText(), "current");
 
-			// Clear editor
-			editor.handleInput("\x17"); // Ctrl+W
-			assert.strictEqual(editor.getText(), "");
+			// Type "x" and move to col 0 to enter history browsing
+			editor.handleInput("x");
+			editor.handleInput("\x1b[H"); // Home = col 0
 
 			// Navigate through history multiple times
 			editor.handleInput("\x1b[A"); // Up - "third"
@@ -2014,13 +2062,9 @@ describe("Editor component", () => {
 			editor.handleInput("\x1b[A"); // Up - "first"
 			assert.strictEqual(editor.getText(), "first");
 
-			// Undo should go back to "" (state before we started browsing), not intermediate states
+			// Undo should go back to "currentx" (state before we started browsing), not intermediate states
 			editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
-			assert.strictEqual(editor.getText(), "");
-
-			// Another undo goes back to "current"
-			editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
-			assert.strictEqual(editor.getText(), "current");
+			assert.strictEqual(editor.getText(), "currentx");
 		});
 
 		it("cursor movement starts new undo unit", () => {

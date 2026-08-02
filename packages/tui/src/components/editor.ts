@@ -818,10 +818,15 @@ export class Editor implements Component, Focusable {
 		}
 
 		// Arrow key navigation (with history support)
+		// Trackpad/touchpad scrolling generates cursor up/down, which the editor
+		// should NOT interpret as history navigation when the input is empty.
+		// Require at least some text in the editor to activate history browsing,
+		// so trackpad scrolls don't accidentally cycle through old prompts.
 		if (kb.matches(data, "tui.editor.cursorUp")) {
 			if (
+				!this.isEditorEmpty() &&
 				this.isOnFirstVisualLine() &&
-				(this.isEditorEmpty() || this.historyIndex > -1 || this.state.cursorCol === 0)
+				(this.historyIndex > -1 || this.state.cursorCol === 0)
 			) {
 				this.navigateHistory(-1);
 			} else if (this.isOnFirstVisualLine()) {
