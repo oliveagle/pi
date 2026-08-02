@@ -852,6 +852,13 @@ export abstract class TuiBase extends Container implements TUI {
 		// Pass input to focused component (including Ctrl+C)
 		// The focused component can decide how to handle Ctrl+C
 		if (this.focusedComponent?.handleInput) {
+			// Filter out all SGR mouse events (DECSET 1006 format).
+			// With mouse mode enabled, trackpad scrolling sends \x1b[<65;x;yM (up)
+			// and \x1b[<66;x;yM (down). Other mouse buttons also send SGR sequences.
+			// All are ignored so the terminal's native scrollback works undisturbed.
+			if (/^\x1b\[<\d+;\d+;\d+[Mm]$/.test(data)) {
+				return;
+			}
 			// Filter out key release events unless component opts in
 			if (isKeyRelease(data) && !this.focusedComponent.wantsKeyRelease) {
 				return;

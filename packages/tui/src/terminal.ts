@@ -146,6 +146,13 @@ export class ProcessTerminal implements Terminal {
 		// Enable bracketed paste mode - terminal will wrap pastes in \x1b[200~ ... \x1b[201~
 		process.stdout.write("\x1b[?2004h");
 
+		// Enable SGR mouse mode (DECSET 1002 + 1006). Without this, trackpad/touchpad
+		// scrolling generates cursor up/down keys (\x1b[A / \x1b[B) which the editor
+		// interprets as history navigation. With mouse mode enabled, scrolls send
+		// SGR sequences (\x1b[<65;x;yM for up, \x1b[<66;x;yM for down) that pi can
+		// safely ignore, allowing the terminal's native scrollback to work.
+		process.stdout.write("\x1b[?1002h\x1b[?1006h");
+
 		// Set up resize handler immediately
 		process.stdout.on("resize", this.resizeHandler);
 
@@ -410,6 +417,9 @@ export class ProcessTerminal implements Terminal {
 
 		// Disable bracketed paste mode
 		process.stdout.write("\x1b[?2004l");
+
+		// Disable SGR mouse mode
+		process.stdout.write("\x1b[?1002l\x1b[?1006l");
 
 		const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
 		this.clearKeyboardProtocolNegotiationBuffer();
