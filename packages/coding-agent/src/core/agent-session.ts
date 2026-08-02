@@ -1155,6 +1155,13 @@ export class AgentSession {
 				expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
 			}
 
+			// Store original input before expansion/skill-mention so persistent-history can recover it.
+			// Compare against the original `text` parameter, not `currentText` (which may have been
+			// rewritten by the skill-mentions input handler before we get here).
+			if (expandedText !== text) {
+				this.sessionManager.appendCustomEntry("pi-original-input-v1", { original: text });
+			}
+
 			// If streaming, queue via steer() or followUp() based on option
 			if (this.isStreaming) {
 				if (!options?.streamingBehavior) {
@@ -1342,6 +1349,11 @@ export class AgentSession {
 		let expandedText = this._expandSkillCommand(text);
 		expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
 
+		// Store original input before expansion so persistent-history can recover it.
+		if (expandedText !== text) {
+			this.sessionManager.appendCustomEntry("pi-original-input-v1", { original: text });
+		}
+
 		await this._queueSteer(expandedText, images);
 	}
 
@@ -1361,6 +1373,11 @@ export class AgentSession {
 		// Expand skill commands and prompt templates
 		let expandedText = this._expandSkillCommand(text);
 		expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
+
+		// Store original input before expansion so persistent-history can recover it.
+		if (expandedText !== text) {
+			this.sessionManager.appendCustomEntry("pi-original-input-v1", { original: text });
+		}
 
 		await this._queueFollowUp(expandedText, images);
 	}
