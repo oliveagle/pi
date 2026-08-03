@@ -785,6 +785,14 @@ export interface Model<TApi extends Api> {
 				: TApi extends "bedrock-converse-stream"
 					? BedrockCompat
 					: never;
+
+	/**
+	 * When true, every error from this model is treated as retryable (except
+	 * context overflow). Gateway services like one-api sit behind many upstream
+	 * providers, so most errors are transient and benefit from automatic retries.
+	 * Default: false.
+	 */
+	retryAllErrors?: boolean;
 }
 
 export interface ImagesModel<TApi extends ImagesApi>

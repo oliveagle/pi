@@ -70,6 +70,7 @@ type _AiModelFieldsAccountedFor = Assert<
 		| "maxTokens"
 		| "headers"
 		| "compat"
+		| "retryAllErrors"
 	>
 >;
 type _AiModelCostFieldsAccountedFor = Assert<

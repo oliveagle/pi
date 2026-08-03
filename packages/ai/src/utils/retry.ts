@@ -5,11 +5,6 @@ function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
 }
 
 const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
-	// OpenCode Go/free-tier limits returned as 429 JSON error types by OpenCode's
-	// Zen API. These are subscription/account limits, not transient throttles.
-	"GoUsageLimitError",
-	"FreeUsageLimitError",
-
 	// OpenCode Go subscription-limit text asks users to enable available-balance
 	// usage after rolling/weekly/monthly limits are reached.
 	"Monthly usage limit reached",
@@ -28,6 +23,7 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"overloaded",
 	"rate.?limit",
 	"too many requests",
+	"401",
 	"429",
 	"500",
 	"502",

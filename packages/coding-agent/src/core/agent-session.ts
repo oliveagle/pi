@@ -2648,10 +2648,15 @@ export class AgentSession {
 	/**
 	 * Check if an error is retryable (overloaded, rate limit, server errors).
 	 * Context overflow errors are NOT retryable (handled by compaction instead).
+	 * Models with `retryAllErrors: true` (gateway providers like one-api) retry
+	 * all non-overflow errors since most upstream errors are transient.
 	 */
 	private _isRetryableError(message: AssistantMessage): boolean {
 		// Context overflow is handled by compaction, not retry.
 		if (isContextOverflow(message, this.model?.contextWindow ?? 0)) return false;
+		// Gateway providers (one-api, etc.) sit in front of many upstreams, so most
+		// errors are transient and should be retried automatically.
+		if (this.model?.retryAllErrors) return true;
 		return isRetryableAssistantError(message);
 	}
 

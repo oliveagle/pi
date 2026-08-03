@@ -128,7 +128,12 @@ function assertSuccessfulOutput(output: AssistantMessage): asserts output is Suc
 // ============================================================================
 
 function isTerminalRateLimitError(errorText: string): boolean {
-	return /GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/i.test(
+	// Only flag genuinely permanent limits (subscription exhaustion, balance
+	// issues, billing). One-api reuses `GoUsageLimitError`/`FreeUsageLimitError`
+	// as 429 JSON `type` values for transient upstream overload messages that
+	// explicitly ask the client to retry, so the type names alone are not a
+	// reliable signal — only message-level permanent-limit text is.
+	return /Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/i.test(
 		errorText,
 	);
 }

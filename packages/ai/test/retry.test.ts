@@ -74,6 +74,33 @@ describe("provider retry classification", () => {
 				fauxAssistantMessage("", { stopReason: "error", errorMessage: "524 status code (no body)" }),
 			),
 		).toBe(true);
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", {
+					stopReason: "error",
+					errorMessage: '401: {"message":"令牌验证失败 (request id: abc123)","type":"one_api_error"}',
+				}),
+			),
+		).toBe(true);
+		// one-api upstream overload with reused GoUsageLimitError type — transient, retry.
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", {
+					stopReason: "error",
+					errorMessage:
+						'429: {"message":"当前分组上游负载已饱和，请稍后再试 (request id: 2026080323424078735574805174341)","type":"GoUsageLimitError","param":"","code":null}',
+				}),
+			),
+		).toBe(true);
+		// OpenCode genuine subscription exhaustion — still non-retryable via message text.
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", {
+					stopReason: "error",
+					errorMessage: "429: GoUsageLimitError: Monthly usage limit reached. Enable available balance usage.",
+				}),
+			),
+		).toBe(false);
 		expect(isRetryableAssistantError(fauxAssistantMessage("not an error"))).toBe(false);
 	});
 });

@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent, type AgentEvent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, type AssistantMessageEvent, EventStream, getModel } from "@earendil-works/pi-ai/compat";
+import {
+	type AssistantMessage,
+	type AssistantMessageEvent,
+	EventStream,
+	getModel,
+	type Model,
+} from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -318,5 +324,86 @@ describe("AgentSession retry", () => {
 		// A follow-up prompt must work (no "Agent is already processing" error)
 		await session.prompt("Follow-up");
 		expect(callCount).toBe(4);
+	});
+
+	it("retries any non-overflow error when model.retryAllErrors is true", async () => {
+		// Gateway providers like one-api sit in front of many upstreams, so most
+		// errors are transient. The model can opt into retry-all behavior to
+		// avoid pattern-matching fragile error text.
+		//
+		// Rather than testing the full prompt-retry flow (which has complex async
+		// sequencing with the Agent harness), verify the property directly on
+		// the agent-session: _isRetryableError should return true for ANY
+		// non-overflow error when the model has retryAllErrors set.
+		const created = await createSession({
+			failCount: 0, // don't auto-fail; we set up the model separately
+		});
+
+		// Patch the model to have retryAllErrors: true
+		const original = created.session.model!;
+		const patchedModel = { ...original, retryAllErrors: true } as Model<"anthropic-messages">;
+		created.session.agent.state.model = patchedModel;
+
+		// Access the private _isRetryableError method to verify behavior
+		const sessionAny = created.session as unknown as {
+			_isRetryableError: (msg: AssistantMessage) => boolean;
+		};
+
+		const unknownError = createAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "some unknown one-api gateway hiccup",
+		});
+		expect(sessionAny._isRetryableError(unknownError)).toBe(true);
+
+		// Overflow is still not retryable even with the flag
+		const overflowError = createAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "prompt is too long: 999999 tokens > 200000 maximum",
+		});
+		expect(sessionAny._isRetryableError(overflowError)).toBe(false);
+	});
+
+	it("does not retry context overflow even when model.retryAllErrors is true", async () => {
+		// retryAllErrors is overridden by overflow — compaction, not retry, is
+		// the right recovery path for that case.
+		let callCount = 0;
+		const streamFn = () => {
+			callCount++;
+			const stream = new MockAssistantStream();
+			queueMicrotask(() => {
+				const msg = createAssistantMessage("", {
+					stopReason: "error",
+					errorMessage: "context_length_exceeded: conversation too long",
+				});
+				stream.push({ type: "start", partial: msg });
+				stream.push({ type: "error", reason: "error", error: msg });
+			});
+			return stream;
+		};
+
+		const modelWithRetryAll = { ...getModel("anthropic", "claude-sonnet-4-5")!, retryAllErrors: true };
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: { model: modelWithRetryAll, systemPrompt: "Test", tools: [] },
+			streamFn,
+		});
+		const sessionManager = SessionManager.inMemory();
+		const settingsManager = SettingsManager.create(tempDir, tempDir);
+		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
+		const modelRegistry = await createModelRegistry(authStorage, tempDir);
+		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		settingsManager.applyOverrides({ retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } });
+		session = new AgentSession({
+			agent,
+			sessionManager,
+			settingsManager,
+			cwd: tempDir,
+			modelRuntime: getModelRuntime(modelRegistry),
+			resourceLoader: createTestResourceLoader(),
+		});
+
+		await session.prompt("Test");
+
+		expect(callCount).toBe(1);
 	});
 });
