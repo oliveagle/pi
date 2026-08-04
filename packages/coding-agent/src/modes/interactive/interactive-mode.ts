@@ -919,19 +919,23 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		await this.init();
 
-		if (!process.env.PI_OFFLINE) {
-			void this.session.modelRuntime
-				.refresh()
-				.then(() => this.updateAvailableProviderCount())
-				.catch(() => {});
-		}
-
-		// Start version check asynchronously
-		checkForNewPiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
+		const { restoreOnly } = this.options;
+		// Restore-only mode: do not refresh models, check versions, or check package updates.
+		// Just render history and wait for user input.
+		if (!restoreOnly) {
+			if (!process.env.PI_OFFLINE) {
+				void this.session.modelRuntime
+					.refresh()
+					.then(() => this.updateAvailableProviderCount())
+					.catch(() => {});
 			}
-		});
+
+			// Start version check asynchronously
+			checkForNewPiVersion(this.version).then((newRelease) => {
+				if (newRelease) {
+					this.showNewVersionNotification(newRelease);
+				}
+			});
 
 		// Start package update check asynchronously
 		this.checkForPackageUpdates()
@@ -954,9 +958,10 @@ export class InteractiveMode {
 				this.showWarning(warning);
 			}
 		});
+		}
 
 		// Show startup warnings
-		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages, restoreOnly } = this.options;
+		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages } = this.options;
 
 		if (migratedProviders && migratedProviders.length > 0) {
 			this.showWarning(`Migrated credentials to auth.json: ${migratedProviders.join(", ")}`);
