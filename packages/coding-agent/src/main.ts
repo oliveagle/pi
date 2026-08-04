@@ -812,6 +812,12 @@ export async function main(args: string[], options?: MainOptions) {
 		cwd: sessionManager.getCwd(),
 		agentDir,
 		sessionManager,
+		sessionStartEvent:
+			parsed.continue || parsed.resume || parsed.fork
+				? { type: "session_start", reason: "resume" }
+				: parsed.session
+					? { type: "session_start", reason: "new" }
+					: undefined,
 	});
 	time("createAgentSessionRuntime");
 	const { services, session, modelFallbackMessage } = runtime;
