@@ -65,17 +65,17 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.getText(), "second prompt");
 		});
 
-		it("Up arrow on empty editor does not trigger history (trackpad protection)", () => {
+		it("Up arrow on empty editor enters history browsing mode", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
 			editor.addToHistory("first prompt");
 			editor.addToHistory("second prompt");
 
-			// Empty editor + Up = no history (trackpad scroll protection)
+			// Empty editor + Up = enter history browsing
 			editor.handleInput("\x1b[A"); // Up arrow
 
-			// Editor should remain empty
-			assert.strictEqual(editor.getText(), "");
+			// Should show most recent history entry
+			assert.strictEqual(editor.getText(), "second prompt");
 		});
 
 		it("cycles through history entries on repeated Up arrow", () => {
@@ -169,11 +169,11 @@ describe("Editor component", () => {
 			editor.handleInput("\x1b[H"); // Home = col 0
 
 			editor.handleInput("\x1b[A"); // Up - shows "second"
-			editor.setText(""); // External clear
+			editor.setText(""); // External clear — exits history browsing
 
-			// Up on empty editor does not enter history (trackpad protection)
+			// Up on empty editor re-enters history browsing
 			editor.handleInput("\x1b[A");
-			assert.strictEqual(editor.getText(), "");
+			assert.strictEqual(editor.getText(), "second");
 		});
 
 		it("does not add empty strings to history", () => {

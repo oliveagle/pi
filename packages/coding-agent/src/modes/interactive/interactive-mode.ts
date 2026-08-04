@@ -50,9 +50,14 @@ import {
 	CONFIG_DIR_NAME,
 	getAgentDir,
 	getAuthPath,
+	getBaseAgentDir,
 	getDebugLogPath,
 	getDocsPath,
+	getProfilesDir,
 	getShareViewerUrl,
+	listProfiles,
+	readActiveProfileSync,
+	setActiveProfile,
 	VERSION,
 } from "../../config.ts";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "../../core/agent-session.ts";
@@ -625,6 +630,27 @@ export class InteractiveMode {
 					label: provider.id,
 					description: formatLoginProviderCompletionDescription(provider),
 				}));
+			};
+		}
+
+		const profileCommand = slashCommands.find((command) => command.name === "profile");
+		if (profileCommand) {
+			profileCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+				const trimmed = prefix.startsWith("/profile") ? prefix.slice("/profile".length).trim() : prefix;
+				const profiles = listProfiles();
+				const commands = ["list", "current", "switch", "unset"].map((name) => ({
+					value: name,
+					label: name,
+					description: name === "switch" ? "Set active profile" : undefined,
+				}));
+				const items = [...commands];
+				if (trimmed === "switch" || trimmed.startsWith("switch ")) {
+					for (const name of profiles) {
+						items.push({ value: name, label: name, description: "profile" });
+					}
+				}
+				if (!trimmed) return items;
+				return items.filter((item) => item.value.startsWith(trimmed));
 			};
 		}
 
@@ -2733,6 +2759,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/profile" || text.startsWith("/profile ")) {
+				this.editor.setText("");
+				await this.handleProfileCommand(text === "/profile" ? undefined : text.slice(9).trim());
+				return;
+			}
 			if (text === "/scoped-models") {
 				this.editor.setText("");
 				await this.showModelsSelector();
@@ -4207,6 +4238,101 @@ export class InteractiveMode {
 		this.editorContainer.addChild(component);
 		this.ui.setFocus(focus);
 		this.ui.requestRender();
+	}
+
+	/**
+	 * Handle the /profile interactive command.
+	 *
+	 * Without arguments: display current profile status.
+	 * With arguments: perform the requested action (list, switch <name>, unset, current).
+	 */
+	private async handleProfileCommand(actionArg?: string): Promise<void> {
+		const baseDir = getBaseAgentDir();
+		const activeProfile = readActiveProfileSync(baseDir);
+		const profilesDir = getProfilesDir();
+
+		const showStatus = (msg: string) => {
+			this.showStatus(msg);
+		};
+
+		if (!actionArg) {
+			// No arguments: show current profile info
+			const agentDir = getAgentDir();
+			const isProfileActive = agentDir !== baseDir;
+			if (isProfileActive) {
+				showStatus(`Active profile: ${chalk.green(activeProfile ?? "")}  (${agentDir})`);
+			} else {
+				showStatus(`No active profile. Using base: ${agentDir}`);
+			}
+			const profiles = listProfiles();
+			if (profiles.length > 0) {
+				console.log(chalk.dim(`\nProfiles: ${profiles.join(", ")}`));
+			}
+			return;
+		}
+
+		const parts = actionArg.split(/\s+/);
+		const subcommand = parts[0];
+
+		switch (subcommand) {
+			case "list": {
+				const profiles = listProfiles();
+				if (profiles.length === 0) {
+					showStatus(`No profiles found. Create one under ${profilesDir}/<name>/`);
+					return;
+				}
+				const lines = profiles.map((p) => (p === activeProfile ? `${chalk.green(p)} (active)` : p));
+				console.log(chalk.bold(`\nProfiles (${profiles.length}):`));
+				for (const line of lines) {
+					console.log(`  ${line}`);
+				}
+				this.ui.requestRender();
+				break;
+			}
+			case "current": {
+				if (activeProfile) {
+					showStatus(`Active profile: ${chalk.green(activeProfile)}`);
+				} else {
+					showStatus(`(no active profile; using ${baseDir})`);
+				}
+				break;
+			}
+			case "switch": {
+				const target = parts[1];
+				if (!target) {
+					showStatus(chalk.yellow("Usage: /profile switch <name>"));
+					return;
+				}
+				if (!/^[a-zA-Z0-9._-]+$/.test(target)) {
+					showStatus(chalk.red(`Invalid profile name: ${target}`));
+					return;
+				}
+				if (target === activeProfile) {
+					showStatus(chalk.dim(`Already using profile "${target}".`));
+					return;
+				}
+				setActiveProfile(target);
+				showStatus(
+					`Switched to profile "${chalk.green(target)}". Restart ${APP_NAME} for the change to take effect.`,
+				);
+				break;
+			}
+			case "unset": {
+				if (!activeProfile) {
+					showStatus(chalk.dim("No active profile to unset."));
+					return;
+				}
+				setActiveProfile(undefined);
+				showStatus(`Cleared active profile. Restart ${APP_NAME} for the change to take effect.`);
+				break;
+			}
+			default: {
+				showStatus(
+					chalk.yellow(`Unknown /profile subcommand: ${subcommand}. Use: list, current, switch <name>, unset`),
+				);
+				break;
+			}
+		}
 	}
 
 	private showSettingsSelector(): void {

@@ -1,4 +1,14 @@
-import { accessSync, constants, existsSync, readFileSync, realpathSync } from "fs";
+import {
+	accessSync,
+	constants,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	unlinkSync,
+	writeFileSync,
+} from "fs";
 import { homedir } from "os";
 import { basename, dirname, join, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "url";
@@ -511,13 +521,116 @@ export function getShareViewerUrl(gistId: string): string {
 // User Config Paths (~/.pi/agent/*)
 // =============================================================================
 
-/** Get the agent config directory (e.g., ~/.pi/agent/) */
-export function getAgentDir(): string {
+/**
+ * Module-level active profile override set by --profile CLI flag.
+ * When set, getAgentDir() returns the profile-specific directory.
+ */
+let _activeProfileOverride: string | undefined;
+
+/**
+ * Set the active profile override (from --profile CLI flag).
+ * This overrides the persistent .active-profile file for a single session.
+ */
+export function setActiveProfileOverride(profile: string | undefined): void {
+	_activeProfileOverride = profile;
+}
+
+/**
+ * Get the active profile name from the override (CLI --profile flag).
+ */
+export function getActiveProfileOverride(): string | undefined {
+	return _activeProfileOverride;
+}
+
+/**
+ * Read the active profile name from the .active-profile file.
+ * Returns undefined if the file doesn't exist or is empty.
+ */
+export function readActiveProfileSync(baseAgentDir: string): string | undefined {
+	try {
+		const profilePath = join(baseAgentDir, ".active-profile");
+		const content = readFileSync(profilePath, "utf-8").trim();
+		return content || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Get the base agent config directory without profile resolution (e.g., ~/.pi/agent/).
+ */
+export function getBaseAgentDir(): string {
 	const envDir = process.env[ENV_AGENT_DIR];
 	if (envDir) {
 		return expandTildePath(envDir);
 	}
 	return join(homedir(), CONFIG_DIR_NAME, "agent");
+}
+
+/** Get the agent config directory (e.g., ~/.pi/agent/ or ~/.pi/agent/profiles/<name>/ if profile active) */
+export function getAgentDir(): string {
+	const baseDir = getBaseAgentDir();
+	const profile = _activeProfileOverride ?? readActiveProfileSync(baseDir);
+	if (profile) {
+		return join(baseDir, "profiles", profile);
+	}
+	return baseDir;
+}
+
+/** Get the profiles directory (e.g., ~/.pi/agent/profiles/) */
+export function getProfilesDir(): string {
+	return join(getBaseAgentDir(), "profiles");
+}
+
+/** Get path to the active profile marker file */
+export function getActiveProfilePath(): string {
+	return join(getBaseAgentDir(), ".active-profile");
+}
+
+/**
+ * Persistently set the active profile for future sessions.
+ * Creates the profiles directory if needed.
+ *
+ * Pass undefined to clear the active profile marker file.
+ */
+export function setActiveProfile(profile: string | undefined): void {
+	if (profile) {
+		const profilesDir = getProfilesDir();
+		if (!existsSync(profilesDir)) {
+			mkdirSync(profilesDir, { recursive: true });
+		}
+		writeFileSync(getActiveProfilePath(), profile, "utf-8");
+	} else {
+		// Clear active profile by removing the marker file
+		const profilePath = getActiveProfilePath();
+		if (existsSync(profilePath)) {
+			try {
+				unlinkSync(profilePath);
+			} catch {
+				// ignore - permission errors etc. fall through to the module override below
+			}
+		}
+	}
+	_activeProfileOverride = profile;
+}
+
+/**
+ * List all available profiles.
+ * Returns an array of profile names (directories under profiles/).
+ */
+export function listProfiles(): string[] {
+	const profilesDir = getProfilesDir();
+	if (!existsSync(profilesDir)) {
+		return [];
+	}
+	try {
+		return readdirSync(profilesDir, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.sort();
+	} catch {
+		return [];
+	}
 }
 
 /** Get path to user's custom themes directory */

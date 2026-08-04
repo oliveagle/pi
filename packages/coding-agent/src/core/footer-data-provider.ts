@@ -102,6 +102,9 @@ export class FooterDataProvider {
 
 	private extensionStatuses = new Map<string, string>();
 	private cachedBranch: string | null | undefined = undefined;
+	private cachedGitStatus: "clean" | "dirty" | null | undefined = undefined;
+	private gitStatusCacheTime = 0;
+	private static readonly GIT_STATUS_TTL_MS = 1000;
 	private gitPaths: GitPaths | null | undefined = undefined;
 	private headWatcher: FSWatcher | null = null;
 	private headWatchFilePath: string | null = null;
@@ -129,6 +132,19 @@ export class FooterDataProvider {
 			this.cachedBranch = this.resolveGitBranchSync();
 		}
 		return this.cachedBranch;
+	}
+
+	/**
+	 * Git working tree status: "clean", "dirty", or null if not in a repo.
+	 * Cached with TTL for responsiveness without fs.watch on the whole repo.
+	 */
+	getGitStatus(): "clean" | "dirty" | null {
+		const now = Date.now();
+		if (this.cachedGitStatus === undefined || now - this.gitStatusCacheTime > FooterDataProvider.GIT_STATUS_TTL_MS) {
+			this.cachedGitStatus = this.resolveGitStatusSync();
+			this.gitStatusCacheTime = now;
+		}
+		return this.cachedGitStatus;
 	}
 
 	/** Extension status texts set via ctx.ui.setStatus() */
@@ -178,6 +194,8 @@ export class FooterDataProvider {
 		}
 		this.clearGitWatchers();
 		this.cachedBranch = undefined;
+		this.cachedGitStatus = undefined;
+		this.gitStatusCacheTime = 0;
 		this.gitPaths = findGitPaths(cwd);
 		this.setupGitWatcher();
 		this.notifyBranchChange();
@@ -245,6 +263,21 @@ export class FooterDataProvider {
 				return branch === ".invalid" ? (resolveBranchWithGitSync(this.gitPaths.repoDir) ?? "detached") : branch;
 			}
 			return "detached";
+		} catch {
+			return null;
+		}
+	}
+
+	private resolveGitStatusSync(): "clean" | "dirty" | null {
+		try {
+			if (!this.gitPaths) return null;
+			const result = spawnSync("git", ["--no-optional-locks", "status", "--porcelain", "--ignore-submodules"], {
+				cwd: this.gitPaths.repoDir,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "ignore"],
+			});
+			if (result.status !== 0) return null;
+			return result.stdout.trim() ? "dirty" : "clean";
 		} catch {
 			return null;
 		}
@@ -384,5 +417,5 @@ export class FooterDataProvider {
 /** Read-only view for extensions - excludes setExtensionStatus, setAvailableProviderCount and dispose */
 export type ReadonlyFooterDataProvider = Pick<
 	FooterDataProvider,
-	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "onBranchChange"
+	"getGitBranch" | "getGitStatus" | "getExtensionStatuses" | "getAvailableProviderCount" | "onBranchChange"
 >;
