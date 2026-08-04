@@ -19,6 +19,8 @@ export interface Args {
 	appendSystemPrompt?: string[];
 	thinking?: ThinkingLevel;
 	continue?: boolean;
+	/** Continue most-recent session and render history, but do not auto-run the agent. */
+	restoreOnly?: boolean;
 	resume?: boolean;
 	help?: boolean;
 	version?: boolean;
@@ -85,6 +87,9 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--continue" || arg === "-c") {
 			result.continue = true;
+		} else if (arg === "--restore-only" || arg === "--replay") {
+			result.continue = true;
+			result.restoreOnly = true;
 		} else if (arg === "--resume" || arg === "-r") {
 			result.resume = true;
 		} else if (arg === "--provider" && i + 1 < args.length) {
@@ -266,6 +271,7 @@ ${chalk.bold("Options:")}
   --mode <mode>                  Output mode: text (default), json, or rpc
   --print, -p                    Non-interactive mode: process prompt and exit
   --continue, -c                 Continue previous session
+  --restore-only, --replay        Continue previous session and render history, but do not auto-run agent
   --resume, -r                   Select a session to resume
   --session <path|id>            Use specific session file or partial UUID
   --session-id <id>              Use exact project session ID, creating it if missing

@@ -326,6 +326,8 @@ export interface InteractiveModeOptions {
 	initialMessage?: string;
 	/** Images to attach to the initial message */
 	initialImages?: ImageContent[];
+	/** When true, restore session history into the TUI but do not auto-run the agent. */
+	restoreOnly?: boolean;
 	/** Additional messages to send after the initial message */
 	initialMessages?: string[];
 	/** Force verbose startup (overrides quietStartup setting) */
@@ -954,7 +956,7 @@ export class InteractiveMode {
 		});
 
 		// Show startup warnings
-		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages } = this.options;
+		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages, restoreOnly } = this.options;
 
 		if (migratedProviders && migratedProviders.length > 0) {
 			this.showWarning(`Migrated credentials to auth.json: ${migratedProviders.join(", ")}`);
@@ -990,6 +992,12 @@ export class InteractiveMode {
 					this.showError(errorMessage);
 				}
 			}
+		}
+
+		// Restore-only mode: render chat history into the TUI but do not auto-run the agent.
+		if (restoreOnly) {
+			this.rebuildChatFromMessages();
+			this.ui.requestRender();
 		}
 
 		// Main interactive loop

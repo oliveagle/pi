@@ -896,6 +896,7 @@ export async function main(args: string[], options?: MainOptions) {
 			initialMessages: parsed.messages,
 			verbose: parsed.verbose,
 			uiMode: parsed.uiMode,
+			restoreOnly: parsed.restoreOnly,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();
