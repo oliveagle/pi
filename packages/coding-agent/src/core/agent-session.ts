@@ -2652,6 +2652,8 @@ export class AgentSession {
 	 * all non-overflow errors since most upstream errors are transient.
 	 */
 	private _isRetryableError(message: AssistantMessage): boolean {
+		// Only error messages can be retried. Aborted (Esc) and other stop reasons are terminal.
+		if (message.stopReason !== "error") return false;
 		// Context overflow is handled by compaction, not retry.
 		if (isContextOverflow(message, this.model?.contextWindow ?? 0)) return false;
 		// Gateway providers (one-api, etc.) sit in front of many upstreams, so most

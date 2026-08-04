@@ -361,6 +361,10 @@ describe("AgentSession retry", () => {
 			errorMessage: "prompt is too long: 999999 tokens > 200000 maximum",
 		});
 		expect(sessionAny._isRetryableError(overflowError)).toBe(false);
+
+		// Esc (aborted) must NOT be retried even with the flag
+		const abortedMsg = createAssistantMessage("", { stopReason: "aborted" });
+		expect(sessionAny._isRetryableError(abortedMsg)).toBe(false);
 	});
 
 	it("does not retry context overflow even when model.retryAllErrors is true", async () => {
