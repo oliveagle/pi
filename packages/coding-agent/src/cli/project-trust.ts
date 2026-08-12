@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import pc from "picocolors";
 import type { ProjectTrustContext } from "../core/extensions/types.ts";
 import type { AppMode } from "../core/project-trust.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
@@ -53,7 +53,7 @@ export function createProjectTrustContext(options: {
 			},
 			notify: (message, type = "info") => {
 				if (options.mode !== "interactive") {
-					const color = type === "error" ? chalk.red : type === "warning" ? chalk.yellow : chalk.cyan;
+					const color = type === "error" ? pc.red : type === "warning" ? pc.yellow : pc.cyan;
 					console.error(color(message));
 				}
 			},

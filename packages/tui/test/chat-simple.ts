@@ -2,7 +2,7 @@
  * Simple chat interface demo using tui.ts
  */
 
-import chalk from "chalk";
+import pc from "picocolors";
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { Loader } from "../src/components/loader.ts";
@@ -88,8 +88,8 @@ editor.onSubmit = (value: string) => {
 
 		const loader = new Loader(
 			tui,
-			(s) => chalk.cyan(s),
-			(s) => chalk.dim(s),
+			(s) => pc.cyan(s),
+			(s) => pc.dim(s),
 			"Thinking...",
 		);
 		children.splice(children.length - 1, 0, loader);

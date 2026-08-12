@@ -38,7 +38,7 @@ function ansiRegex({ onlyFirst = false }: { onlyFirst?: boolean } = {}): RegExp 
 
 	const pattern = `${osc}|${csi}`;
 
-	return new RegExp(pattern, onlyFirst ? undefined : "g");
+	return new RegExp(pattern, onlyFirst ? "" : "g");
 }
 
 const regex = ansiRegex();

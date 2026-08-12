@@ -9,7 +9,7 @@ import {
 	type SelectListTheme,
 	type SettingsListTheme,
 } from "@earendil-works/pi-tui";
-import chalk from "chalk";
+import pc from "picocolors";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
@@ -382,23 +382,23 @@ export class Theme {
 	}
 
 	bold(text: string): string {
-		return chalk.bold(text);
+		return pc.bold(text);
 	}
 
 	italic(text: string): string {
-		return chalk.italic(text);
+		return pc.italic(text);
 	}
 
 	underline(text: string): string {
-		return chalk.underline(text);
+		return pc.underline(text);
 	}
 
 	inverse(text: string): string {
-		return chalk.inverse(text);
+		return pc.inverse(text);
 	}
 
 	strikethrough(text: string): string {
-		return chalk.strikethrough(text);
+		return pc.strikethrough(text);
 	}
 
 	getFgAnsi(color: ThemeColor): string {
@@ -1256,7 +1256,7 @@ export function getMarkdownTheme(): MarkdownTheme {
 		bold: (text: string) => theme.bold(text),
 		italic: (text: string) => theme.italic(text),
 		underline: (text: string) => theme.underline(text),
-		strikethrough: (text: string) => chalk.strikethrough(text),
+		strikethrough: (text: string) => pc.strikethrough(text),
 		highlightCode: (code: string, lang?: string): string[] => {
 			// Validate language before highlighting to avoid stderr spam from cli-highlight
 			const validLang = lang && supportsLanguage(lang) ? lang : undefined;

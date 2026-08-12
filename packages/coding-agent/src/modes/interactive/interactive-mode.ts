@@ -42,7 +42,7 @@ import {
 	TuiMainScreen,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import chalk from "chalk";
+import pc from "picocolors";
 import { spawn, spawnSync } from "child_process";
 import {
 	APP_NAME,
@@ -3748,7 +3748,7 @@ export class InteractiveMode {
 
 		const resumeCommand = formatResumeCommand(this.sessionManager);
 		if (resumeCommand) {
-			process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
+			process.stdout.write(`${pc.dim("To resume this session:")} ${resumeCommand}\n`);
 		}
 
 		process.exit(0);
@@ -4315,13 +4315,13 @@ export class InteractiveMode {
 			const agentDir = getAgentDir();
 			const isProfileActive = agentDir !== baseDir;
 			if (isProfileActive) {
-				showStatus(`Active profile: ${chalk.green(activeProfile ?? "")}  (${agentDir})`);
+				showStatus(`Active profile: ${pc.green(activeProfile ?? "")}  (${agentDir})`);
 			} else {
 				showStatus(`No active profile. Using base: ${agentDir}`);
 			}
 			const profiles = listProfiles();
 			if (profiles.length > 0) {
-				console.log(chalk.dim(`\nProfiles: ${profiles.join(", ")}`));
+				console.log(pc.dim(`\nProfiles: ${profiles.join(", ")}`));
 			}
 			return;
 		}
@@ -4336,8 +4336,8 @@ export class InteractiveMode {
 					showStatus(`No profiles found. Create one under ${profilesDir}/<name>/`);
 					return;
 				}
-				const lines = profiles.map((p) => (p === activeProfile ? `${chalk.green(p)} (active)` : p));
-				console.log(chalk.bold(`\nProfiles (${profiles.length}):`));
+				const lines = profiles.map((p) => (p === activeProfile ? `${pc.green(p)} (active)` : p));
+				console.log(pc.bold(`\nProfiles (${profiles.length}):`));
 				for (const line of lines) {
 					console.log(`  ${line}`);
 				}
@@ -4346,7 +4346,7 @@ export class InteractiveMode {
 			}
 			case "current": {
 				if (activeProfile) {
-					showStatus(`Active profile: ${chalk.green(activeProfile)}`);
+					showStatus(`Active profile: ${pc.green(activeProfile)}`);
 				} else {
 					showStatus(`(no active profile; using ${baseDir})`);
 				}
@@ -4355,26 +4355,26 @@ export class InteractiveMode {
 			case "switch": {
 				const target = parts[1];
 				if (!target) {
-					showStatus(chalk.yellow("Usage: /profile switch <name>"));
+					showStatus(pc.yellow("Usage: /profile switch <name>"));
 					return;
 				}
 				if (!/^[a-zA-Z0-9._-]+$/.test(target)) {
-					showStatus(chalk.red(`Invalid profile name: ${target}`));
+					showStatus(pc.red(`Invalid profile name: ${target}`));
 					return;
 				}
 				if (target === activeProfile) {
-					showStatus(chalk.dim(`Already using profile "${target}".`));
+					showStatus(pc.dim(`Already using profile "${target}".`));
 					return;
 				}
 				setActiveProfile(target);
 				showStatus(
-					`Switched to profile "${chalk.green(target)}". Restart ${APP_NAME} for the change to take effect.`,
+					`Switched to profile "${pc.green(target)}". Restart ${APP_NAME} for the change to take effect.`,
 				);
 				break;
 			}
 			case "unset": {
 				if (!activeProfile) {
-					showStatus(chalk.dim("No active profile to unset."));
+					showStatus(pc.dim("No active profile to unset."));
 					return;
 				}
 				setActiveProfile(undefined);
@@ -4383,7 +4383,7 @@ export class InteractiveMode {
 			}
 			default: {
 				showStatus(
-					chalk.yellow(`Unknown /profile subcommand: ${subcommand}. Use: list, current, switch <name>, unset`),
+					pc.yellow(`Unknown /profile subcommand: ${subcommand}. Use: list, current, switch <name>, unset`),
 				);
 				break;
 			}

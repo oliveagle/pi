@@ -4,7 +4,7 @@
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@earendil-works/pi-ai";
-import chalk from "chalk";
+import pc from "picocolors";
 import { minimatch } from "minimatch";
 import { isValidThinkingLevel } from "../cli/args.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
@@ -355,7 +355,7 @@ export async function resolveModelScopeWithDiagnostics(
 export async function resolveModelScope(patterns: string[], modelRuntime: ModelRuntime): Promise<ScopedModel[]> {
 	const { scopedModels, diagnostics } = await resolveModelScopeWithDiagnostics(patterns, modelRuntime);
 	for (const diagnostic of diagnostics) {
-		console.warn(chalk.yellow(`Warning: ${diagnostic.message}`));
+		console.warn(pc.yellow(`Warning: ${diagnostic.message}`));
 	}
 	return scopedModels;
 }
@@ -601,7 +601,7 @@ export async function findInitialModel(options: {
 			modelRuntime,
 		});
 		if (resolved.error) {
-			console.error(chalk.red(resolved.error));
+			console.error(pc.red(resolved.error));
 			process.exit(1);
 		}
 		if (resolved.model) {
@@ -668,7 +668,7 @@ export async function restoreModelFromSession(
 
 	if (restoredModel && hasConfiguredAuth) {
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Restored model: ${savedProvider}/${savedModelId}`));
+			console.log(pc.dim(`Restored model: ${savedProvider}/${savedModelId}`));
 		}
 		return { model: restoredModel, fallbackMessage: undefined };
 	}
@@ -677,13 +677,13 @@ export async function restoreModelFromSession(
 	const reason = !restoredModel ? "model no longer exists" : "no auth configured";
 
 	if (shouldPrintMessages) {
-		console.error(chalk.yellow(`Warning: Could not restore model ${savedProvider}/${savedModelId} (${reason}).`));
+		console.error(pc.yellow(`Warning: Could not restore model ${savedProvider}/${savedModelId} (${reason}).`));
 	}
 
 	// If we already have a model, use it as fallback
 	if (currentModel) {
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
+			console.log(pc.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
 		}
 		return {
 			model: currentModel,
@@ -712,7 +712,7 @@ export async function restoreModelFromSession(
 		}
 
 		if (shouldPrintMessages) {
-			console.log(chalk.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
+			console.log(pc.dim(`Falling back to: ${fallbackModel.provider}/${fallbackModel.id}`));
 		}
 
 		return {

@@ -61,7 +61,7 @@ declare module "@earendil-works/pi-tui" {
 	interface Keybindings extends AppKeybindings {}
 }
 
-export const KEYBINDINGS = {
+export const KEYBINDINGS: KeybindingDefinitions = {
 	...TUI_KEYBINDINGS,
 	"app.interrupt": { defaultKeys: "escape", description: "Cancel or abort" },
 	"app.clear": { defaultKeys: "ctrl+c", description: "Clear editor" },

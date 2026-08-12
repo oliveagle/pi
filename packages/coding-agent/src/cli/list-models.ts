@@ -4,7 +4,7 @@
 
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { fuzzyFilter } from "@earendil-works/pi-tui";
-import chalk from "chalk";
+import pc from "picocolors";
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
 
@@ -29,7 +29,7 @@ function formatTokenCount(count: number): string {
 export async function listModels(modelRuntime: ModelRuntime, searchPattern?: string): Promise<void> {
 	const loadError = modelRuntime.getError();
 	if (loadError) {
-		console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+		console.error(pc.yellow(`Warning: errors loading models.json:\n${loadError}`));
 	}
 
 	const models = [...(await modelRuntime.getAvailable())];

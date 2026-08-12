@@ -93,7 +93,8 @@ type BuiltInKeyBindings = Partial<Record<KeyId, { keybinding: string; restrictOv
 
 const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltInKeyBindings => {
 	const builtinKeybindings = {} as BuiltInKeyBindings;
-	for (const [keybinding, keys] of Object.entries(resolvedKeybindings)) {
+	for (const keybinding in resolvedKeybindings) {
+		const keys = resolvedKeybindings[keybinding];
 		if (keys === undefined) continue;
 		const keyList = Array.isArray(keys) ? keys : [keys];
 		const restrictOverride = (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]).includes(keybinding);

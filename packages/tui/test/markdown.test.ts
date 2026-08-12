@@ -1053,7 +1053,7 @@ bar`,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.cyan(text), // This should NOT be applied to blockquotes
+					color: (text) => pc.cyan(text), // This should NOT be applied to blockquotes
 				},
 			);
 
@@ -1131,7 +1131,7 @@ bar`,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.yellow(text), // This should NOT be applied to blockquotes
+					color: (text) => pc.yellow(text), // This should NOT be applied to blockquotes
 					italic: true,
 				},
 			);

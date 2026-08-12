@@ -49,7 +49,7 @@ describe("TruncatedText component", () => {
 	});
 
 	it("preserves ANSI codes in output and pads correctly", () => {
-		const styledText = `${chalk.red("Hello")} ${chalk.blue("world")}`;
+		const styledText = `${pc.red("Hello")} ${chalk.blue("world")}`;
 		const text = new TruncatedText(styledText, 1, 0);
 		const lines = text.render(40);
 
@@ -63,7 +63,7 @@ describe("TruncatedText component", () => {
 	});
 
 	it("truncates styled text and adds reset code before ellipsis", () => {
-		const longStyledText = chalk.red("This is a very long red text that will be truncated");
+		const longStyledText = pc.red("This is a very long red text that will be truncated");
 		const text = new TruncatedText(longStyledText, 1, 0);
 		const lines = text.render(20);
 

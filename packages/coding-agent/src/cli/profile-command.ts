@@ -12,7 +12,7 @@
  *   pi profile show [name]   - print the absolute path to a profile's agentDir
  */
 
-import chalk from "chalk";
+import pc from "picocolors";
 import { existsSync } from "fs";
 import { join } from "path";
 import {
@@ -31,23 +31,23 @@ const PROFILE_COMMAND_USAGE = `${APP_NAME} profile <list|current|switch|unset|sh
 function printProfileList(activeProfile: string | undefined): void {
 	const profiles = listProfiles();
 	if (profiles.length === 0) {
-		console.log(chalk.dim(`No profiles found. Create one under ${getProfilesDir()}/<name>/`));
-		console.log(chalk.dim(`Profiles store their own settings.json / auth.json / models.json.`));
+		console.log(pc.dim(`No profiles found. Create one under ${getProfilesDir()}/<name>/`));
+		console.log(pc.dim(`Profiles store their own settings.json / auth.json / models.json.`));
 		return;
 	}
-	console.log(chalk.bold(`Profiles (${profiles.length}):`));
+	console.log(pc.bold(`Profiles (${profiles.length}):`));
 	for (const profile of profiles) {
 		const isActive = profile === activeProfile;
-		const marker = isActive ? chalk.green(" * ") : "   ";
+		const marker = isActive ? pc.green(" * ") : "   ";
 		const path = join(getProfilesDir(), profile);
 		const exists = existsSync(path);
-		const status = exists ? "" : chalk.yellow(" (missing directory)");
-		const label = isActive ? chalk.green(profile) : profile;
+		const status = exists ? "" : pc.yellow(" (missing directory)");
+		const label = isActive ? pc.green(profile) : profile;
 		console.log(`${marker}${label}${status}`);
 	}
 	if (activeProfile && !profiles.includes(activeProfile)) {
 		console.log(
-			chalk.yellow(
+			pc.yellow(
 				`\nActive profile "${activeProfile}" is not in the profiles directory; using ${join(
 					getProfilesDir(),
 					activeProfile,
@@ -86,7 +86,7 @@ export async function handleProfileCommand(args: string[]): Promise<boolean> {
 			if (activeProfile) {
 				console.log(activeProfile);
 			} else {
-				console.log(chalk.dim(`(no active profile; using ${getBaseAgentDir()})`));
+				console.log(pc.dim(`(no active profile; using ${getBaseAgentDir()})`));
 			}
 			return true;
 		}
@@ -94,37 +94,37 @@ export async function handleProfileCommand(args: string[]): Promise<boolean> {
 		case "switch": {
 			const target = actionArgs.find((arg) => !arg.startsWith("-"));
 			if (!target) {
-				console.error(chalk.red(`Usage: ${APP_NAME} profile switch <name>`));
-				console.error(chalk.dim(`Tip: run "${APP_NAME} profile list" to see existing profiles.`));
+				console.error(pc.red(`Usage: ${APP_NAME} profile switch <name>`));
+				console.error(pc.dim(`Tip: run "${APP_NAME} profile list" to see existing profiles.`));
 				process.exitCode = 1;
 				return true;
 			}
 
 			if (!/^[a-zA-Z0-9._-]+$/.test(target)) {
 				console.error(
-					chalk.red(`Invalid profile name "${target}". Use letters, digits, dots, dashes, or underscores.`),
+					pc.red(`Invalid profile name "${target}". Use letters, digits, dots, dashes, or underscores.`),
 				);
 				process.exitCode = 1;
 				return true;
 			}
 
 			setActiveProfile(target);
-			console.log(chalk.green(`Active profile set to "${target}".`));
-			console.log(chalk.dim(`Marker: ${getActiveProfilePath()}`));
-			console.log(chalk.dim(`Profile dir: ${join(getProfilesDir(), target)}`));
+			console.log(pc.green(`Active profile set to "${target}".`));
+			console.log(pc.dim(`Marker: ${getActiveProfilePath()}`));
+			console.log(pc.dim(`Profile dir: ${join(getProfilesDir(), target)}`));
 			return true;
 		}
 
 		case "unset": {
 			setActiveProfile(undefined);
-			console.log(chalk.green(`Cleared active profile. Future runs will use ${getBaseAgentDir()}.`));
+			console.log(pc.green(`Cleared active profile. Future runs will use ${getBaseAgentDir()}.`));
 			return true;
 		}
 
 		case "show": {
 			const target = actionArgs.find((arg) => !arg.startsWith("-")) ?? activeProfile;
 			if (!target) {
-				console.error(chalk.red("No profile specified and no active profile."));
+				console.error(pc.red("No profile specified and no active profile."));
 				process.exitCode = 1;
 				return true;
 			}
@@ -134,8 +134,8 @@ export async function handleProfileCommand(args: string[]): Promise<boolean> {
 		}
 
 		default: {
-			console.error(chalk.red(`Unknown subcommand "${action}" for "${APP_NAME} profile".`));
-			console.error(chalk.dim(`Usage: ${PROFILE_COMMAND_USAGE}`));
+			console.error(pc.red(`Unknown subcommand "${action}" for "${APP_NAME} profile".`));
+			console.error(pc.dim(`Usage: ${PROFILE_COMMAND_USAGE}`));
 			process.exitCode = 1;
 			return true;
 		}

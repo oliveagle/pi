@@ -1,5 +1,5 @@
 import { accessSync, constants } from "node:fs";
-import { access } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { normalizePath, resolvePath } from "../../utils/paths.ts";
 
 const NARROW_NO_BREAK_SPACE = "\u202F";
@@ -30,7 +30,7 @@ function fileExists(filePath: string): boolean {
 
 export async function pathExists(filePath: string): Promise<boolean> {
 	try {
-		await access(filePath, constants.F_OK);
+		await stat(filePath);
 		return true;
 	} catch {
 		return false;

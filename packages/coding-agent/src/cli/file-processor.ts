@@ -4,7 +4,7 @@
 
 import { access, readFile, stat } from "node:fs/promises";
 import type { ImageContent } from "@earendil-works/pi-ai";
-import chalk from "chalk";
+import pc from "picocolors";
 import { resolve } from "path";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -34,7 +34,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 		try {
 			await access(absolutePath);
 		} catch {
-			console.error(chalk.red(`Error: File not found: ${absolutePath}`));
+			console.error(pc.red(`Error: File not found: ${absolutePath}`));
 			process.exit(1);
 		}
 
@@ -77,7 +77,7 @@ export async function processFileArguments(fileArgs: string[], options?: Process
 				text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
 			} catch (error: unknown) {
 				const message = error instanceof Error ? error.message : String(error);
-				console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+				console.error(pc.red(`Error: Could not read file ${absolutePath}: ${message}`));
 				process.exit(1);
 			}
 		}
