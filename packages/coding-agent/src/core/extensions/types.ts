@@ -342,6 +342,12 @@ export interface ExtensionContext {
 	getContextUsage(): ContextUsage | undefined;
 	/** Trigger compaction without awaiting completion. */
 	compact(options?: CompactOptions): void;
+	/** Trigger async compaction in background. Non-blocking. */
+	startAsyncCompaction(): Promise<void>;
+	/** Cancel ongoing async compaction. */
+	cancelAsyncCompaction(): void;
+	/** Check if async compaction is in progress. */
+	isAsyncCompacting(): boolean;
 	/** Get the current effective system prompt. */
 	getSystemPrompt(): string;
 }
@@ -594,8 +600,8 @@ export interface SessionBeforeCompactEvent {
 	preparation: CompactionPreparation;
 	branchEntries: SessionEntry[];
 	customInstructions?: string;
-	/** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
-	reason: "manual" | "threshold" | "overflow";
+	/** What triggered the compaction: manual /compact, the context threshold, context overflow recovery, or async threshold */
+	reason: "manual" | "threshold" | "overflow" | "async_threshold";
 	/** True when the aborted turn is retried after this compaction (overflow recovery) */
 	willRetry: boolean;
 	signal: AbortSignal;
@@ -606,8 +612,8 @@ export interface SessionCompactEvent {
 	type: "session_compact";
 	compactionEntry: CompactionEntry;
 	fromExtension: boolean;
-	/** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
-	reason: "manual" | "threshold" | "overflow";
+	/** What triggered the compaction: manual /compact, the context threshold, context overflow recovery, or async threshold */
+	reason: "manual" | "threshold" | "overflow" | "async_threshold";
 	/** True when the aborted turn is retried after this compaction (overflow recovery) */
 	willRetry: boolean;
 }
@@ -1641,6 +1647,9 @@ export interface ExtensionContextActions {
 	shutdown: () => void;
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (options?: CompactOptions) => void;
+	startAsyncCompaction: () => Promise<void>;
+	cancelAsyncCompaction: () => void;
+	isAsyncCompacting: () => boolean;
 	getSystemPrompt: () => string;
 	getSystemPromptOptions?: () => BuildSystemPromptOptions;
 }

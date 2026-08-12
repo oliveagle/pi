@@ -976,8 +976,19 @@ export class SessionManager {
 		}
 	}
 
+	/** Recreate the session directory if it was removed externally (e.g. `rm -rf`,
+	 * `git clean` against an unignored path, disk-cleanup scripts). The constructor
+	 * only creates it once, so every write site must go through here to avoid
+	 * silent ENOENT persistence failures. */
+	private _ensureSessionDir(): void {
+		if (!existsSync(this.sessionDir)) {
+			mkdirSync(this.sessionDir, { recursive: true });
+		}
+	}
+
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
+		this._ensureSessionDir();
 		const fd = openSync(this.sessionFile, "w");
 		try {
 			for (const entry of this.fileEntries) {
@@ -1014,6 +1025,7 @@ export class SessionManager {
 
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
+		this._ensureSessionDir();
 
 		const hasAssistant = this.fileEntries.some((e) => e.type === "message" && e.message.role === "assistant");
 		if (!hasAssistant) {
